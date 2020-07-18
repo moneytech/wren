@@ -758,18 +758,21 @@ static void readNumber(Parser* parser)
     nextChar(parser);
     while (isDigit(peekChar(parser))) nextChar(parser);
   }
-  
+
   // See if the number is in scientific notation.
   if (matchChar(parser, 'e') || matchChar(parser, 'E'))
   {
-    // Allow a negative exponent.
-    matchChar(parser, '-');
-    
+    // Allow a single positive/negative exponent symbol.
+    if(!matchChar(parser, '+'))
+    {
+      matchChar(parser, '-');
+    }
+
     if (!isDigit(peekChar(parser)))
     {
       lexError(parser, "Unterminated scientific notation.");
     }
-    
+
     while (isDigit(peekChar(parser))) nextChar(parser);
   }
 
@@ -2088,7 +2091,7 @@ static void field(Compiler* compiler, bool canAssign)
 {
   // Initialize it with a fake value so we can keep parsing and minimize the
   // number of cascaded errors.
-  int field = 255;
+  int field = MAX_FIELDS;
 
   ClassInfo* enclosingClass = getEnclosingClass(compiler);
 
@@ -2692,8 +2695,8 @@ void expression(Compiler* compiler)
 
 // Returns the number of arguments to the instruction at [ip] in [fn]'s
 // bytecode.
-static int getNumArguments(const uint8_t* bytecode, const Value* constants,
-                           int ip)
+static int getByteCountForArguments(const uint8_t* bytecode,
+                            const Value* constants, int ip)
 {
   Code instruction = (Code)bytecode[ip];
   switch (instruction)
@@ -2759,6 +2762,7 @@ static int getNumArguments(const uint8_t* bytecode, const Value* constants,
     case CODE_METHOD_INSTANCE:
     case CODE_METHOD_STATIC:
     case CODE_IMPORT_MODULE:
+    case CODE_IMPORT_VARIABLE:
       return 2;
 
     case CODE_SUPER_0:
@@ -2778,7 +2782,6 @@ static int getNumArguments(const uint8_t* bytecode, const Value* constants,
     case CODE_SUPER_14:
     case CODE_SUPER_15:
     case CODE_SUPER_16:
-    case CODE_IMPORT_VARIABLE:
       return 4;
 
     case CODE_CLOSURE:
@@ -2846,7 +2849,7 @@ static void endLoop(Compiler* compiler)
     else
     {
       // Skip this instruction and its arguments.
-      i += 1 + getNumArguments(compiler->fn->code.data,
+      i += 1 + getByteCountForArguments(compiler->fn->code.data,
                                compiler->fn->constants.data, i);
     }
   }
@@ -3563,7 +3566,7 @@ void wrenBindMethodCode(ObjClass* classObj, ObjFn* fn)
         // Other instructions are unaffected, so just skip over them.
         break;
     }
-    ip += 1 + getNumArguments(fn->code.data, fn->constants.data, ip);
+    ip += 1 + getByteCountForArguments(fn->code.data, fn->constants.data, ip);
   }
 }
 
